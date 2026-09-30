@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee61fd6444c845d47b14f6a6b27693b5, type: 3}
+  m_Name: CubeSpawnerScript
+  m_EditorClassIdentifier: Assembly-CSharp-Editor::KJD.Editor.ScriptVault.VaultScriptAsset
+  _scriptName: CubeSpawnerScript
+  _category: 0
+  _tags: []
+  _description: Test
+  _howToUse: Test
+  _sourceTextAsset: {fileID: 4900000, guid: 273fff3111fff1540b42fad4320983a0, type: 3}
+  _targetFileName: Tools

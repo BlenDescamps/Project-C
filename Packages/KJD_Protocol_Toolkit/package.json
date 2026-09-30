@@ -1,0 +1,17 @@
+{
+  "name": "com.kjd.kjd-protocol",
+  "version": "0.1.0",
+  "displayName": "KJD Protocol",
+  "description": "Toolkit to create worlds",
+  "unity": "6000.3",
+  "keywords": [
+    "timeline",
+    "version-control",
+    "design"
+  ],
+  "author": {
+    "name": "Kim Jeong Dev",
+    "email": "kimjeongdev@gmail.com",
+    "url": "http://kimjeongdev.itch.io"
+  }
+}

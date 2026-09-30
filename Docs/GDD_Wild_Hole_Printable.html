@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>GDD Exécutif — Wild Hole: Tavern & Cleaver</title>
+    <style>
+        :root {
+            --primary: #c2410c;
+            --primary-dark: #9a3412;
+            --accent: #d97706;
+            --text: #1f2937;
+            --text-light: #4b5563;
+            --bg-light: #f9fafb;
+            --border: #e5e7eb;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+            color: var(--text);
+            line-height: 1.5;
+            background: #f3f4f6;
+            padding: 20px;
+        }
+
+        .document-container {
+            max-width: 850px;
+            margin: 0 auto;
+            background: #ffffff;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .page {
+            padding: 40px 50px;
+            position: relative;
+            background: #fff;
+        }
+
+        /* En-tête / Couverture */
+        .header {
+            border-bottom: 3px solid var(--primary);
+            padding-bottom: 20px;
+            margin-bottom: 25px;
+        }
+
+        .tagline {
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+
+        h1 {
+            font-size: 28px;
+            color: #111827;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .pitch-box {
+            background: #fff7ed;
+            border-left: 4px solid var(--accent);
+            padding: 12px 16px;
+            font-style: italic;
+            color: #9a3412;
+            font-size: 14px;
+            margin-bottom: 20px;
+            border-radius: 0 6px 6px 0;
+        }
+
+        /* Metadata Grid */
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            background: var(--bg-light);
+            border: 1px solid var(--border);
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 25px;
+            font-size: 12px;
+        }
+
+        .meta-item strong {
+            display: block;
+            color: var(--text-light);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        h2 {
+            font-size: 16px;
+            color: var(--primary-dark);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 5px;
+            margin-top: 20px;
+            margin-bottom: 12px;
+        }
+
+        h3 {
+            font-size: 14px;
+            color: #111827;
+            margin-bottom: 6px;
+        }
+
+        p, li {
+            font-size: 12.5px;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+
+        ul {
+            padding-left: 18px;
+            margin-bottom: 12px;
+        }
+
+        /* Pillars Grid */
+        .pillars-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .pillar-card {
+            border: 1px solid var(--border);
+            border-top: 3px solid var(--primary);
+            padding: 12px;
+            border-radius: 4px;
+            background: #fafafa;
+        }
+
+        .pillar-card h4 {
+            font-size: 13px;
+            color: #111827;
+            margin-bottom: 6px;
+        }
+
+        .pillar-card p {
+            font-size: 11.5px;
+            color: var(--text-light);
+            margin: 0;
+        }
+
+        /* Loop Flowchart */
+        .flow-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-light);
+            border: 1px solid var(--border);
+            padding: 12px 10px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .flow-step {
+            text-align: center;
+            flex: 1;
+            padding: 0 6px;
+        }
+
+        .flow-step .step-num {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            line-height: 20px;
+            background: var(--primary);
+            color: #fff;
+            border-radius: 50%;
+            font-size: 10px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .flow-step .step-title {
+            font-size: 11px;
+            font-weight: 700;
+            color: #111827;
+            display: block;
+        }
+
+        .flow-step .step-desc {
+            font-size: 9.5px;
+            color: var(--text-light);
+        }
+
+        .flow-arrow {
+            color: #9ca3af;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11.5px;
+            margin-bottom: 18px;
+        }
+
+        th, td {
+            padding: 8px 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: #f3f4f6;
+            color: #374151;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        tr:nth-child(even) td {
+            background: #fafafa;
+        }
+
+        /* Highlight Boxes */
+        .alert-box {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-left: 4px solid #ef4444;
+            padding: 10px 14px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 11.5px;
+        }
+
+        .alert-box strong {
+            color: #991b1b;
+        }
+
+        .print-footer {
+            font-size: 10px;
+            color: #9ca3af;
+            text-align: center;
+            border-top: 1px solid var(--border);
+            padding-top: 12px;
+            margin-top: 30px;
+        }
+
+        /* Impression Propre */
+        @media print {
+            body {
+                background: #fff;
+                padding: 0;
+            }
+
+            .document-container {
+                box-shadow: none;
+                max-width: 100%;
+            }
+
+            .page {
+                padding: 15mm 18mm;
+            }
+
+            .page-break {
+                page-break-after: always;
+                break-after: page;
+            }
+
+            .no-break {
+                break-inside: avoid;
+            }
+
+            @page {
+                size: A4;
+                margin: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="document-container">
+
+    <!-- PAGE 1 : VISION, CONCEPT & CORE LOOP -->
+    <div class="page page-break">
+        <div class="header">
+            <div class="tagline">Game Design Document Exécutif • Version Solo Révisée</div>
+            <h1>🍳 Wild Hole: Tavern & Cleaver</h1>
+        </div>
+
+        <div class="pitch-box">
+            « Seul apprenti de la Taverne <strong>"Wild Hole"</strong>, votre patron a disparu... Déterminé à ne pas laisser la taverne fermer, vous devrez faire tout ce qui est en votre pouvoir pour la maintenir à flot et essayer de comprendre ce qui est arrivé à votre mentor.<br><br>
+            Pour vous aider, <strong>Kuko</strong>, le couteau demi-chef de votre patron qui semble être possédé par un démon.<br><br>
+            Découvrez la vérité et prospérez dans cette aventure culinaire, entre cuisine folle et exploration de donjon !<br><br>
+            <strong>Prêt ? Cookez !</strong> »
+        </div>
+
+        <div class="meta-grid">
+            <div class="meta-item">
+                <strong>Genre</strong>
+                FPS / Rogue-lite & Cooking
+            </div>
+            <div class="meta-item">
+                <strong>Format & Caméra</strong>
+                Solo • 100% Vue Subjective
+            </div>
+            <div class="meta-item">
+                <strong>Équipe Prévue</strong>
+                2 Développeurs + 1 Artiste
+            </div>
+            <div class="meta-item">
+                <strong>Temps de Dév.</strong>
+                9 Mois (Plein Temps)
+            </div>
+        </div>
+
+        <h2>I. Les 3 Piliers de Design</h2>
+        <div class="pillars-grid">
+            <div class="pillar-card">
+                <h4>1. Chasse & Fourneau</h4>
+                <p>Deux rythmes alternés : l'exploration armée sous tension dans le donjon, suivie du rush frénétique derrière le comptoir du food-truck.</p>
+            </div>
+            <div class="pillar-card">
+                <h4>2. Kuko le Couteau-Démon</h4>
+                <p>Un demi-chef tyrannique mais lâche qui commente vos actions, sert d'outil de découpe chirurgicale (QTE) et anime toute l'histoire.</p>
+            </div>
+            <div class="pillar-card">
+                <h4>3. Le Risque Sanitaire</h4>
+                <p>La règle du plat tombé par terre et de la viande avariée : faut-il jeter la commande sous pression ou risquer d'empoisonner le client ?</p>
+            </div>
+        </div>
+
+        <h2>II. La Boucle Journalière (Core Loop 24h)</h2>
+        <div class="flow-container">
+            <div class="flow-step">
+                <span class="step-num">1</span>
+                <span class="step-title">Portails</span>
+                <span class="step-desc">Choix irréversible du biome</span>
+            </div>
+            <div class="flow-arrow">➔</div>
+            <div class="flow-step">
+                <span class="step-num">2</span>
+                <span class="step-title">Donjon FPS</span>
+                <span class="step-desc">Chasse & Dépeçage Kuko</span>
+            </div>
+            <div class="flow-arrow">➔</div>
+            <div class="flow-step">
+                <span class="step-num">3</span>
+                <span class="step-title">L'Ardoise</span>
+                <span class="step-desc">Choix des 2-3 plats du jour</span>
+            </div>
+            <div class="flow-arrow">➔</div>
+            <div class="flow-step">
+                <span class="step-num">4</span>
+                <span class="step-title">Coup de Feu</span>
+                <span class="step-desc">Cuisson physique & service</span>
+            </div>
+            <div class="flow-arrow">➔</div>
+            <div class="flow-step">
+                <span class="step-num">5</span>
+                <span class="step-title">Comptabilité</span>
+                <span class="step-desc">Paiement dette & upgrades</span>
+            </div>
+        </div>
+
+        <h2>III. Mécaniques Culinaires & Système de Chasse</h2>
+        <ul>
+            <li><strong>Combat & Découpe Kuko :</strong> Les monstres ont des faiblesses d'armes. Une fois abattus, Kuko déclenche un QTE rythmique qui détermine le grade de la viande (Légendaire, Normal, Avarié).</li>
+            <li><strong>Survie en Donjon :</strong> Pas de potions. Le joueur régénère ses PV en consommant les plats et encas cuisinés la veille à la taverne.</li>
+            <li><strong>Sanction en cas de K.O. :</strong> Téléportation de secours par Kuko. Vous conservez uniquement <strong>20 % du butin</strong> pour assurer le service du soir.</li>
+            <li><strong>Physique & Contamination :</strong> Tout plat qui heurte le carrelage devient contaminé. Le servir confère un <strong>% de chance d'empoisonner le client</strong>, provoquant une chute immédiate de réputation.</li>
+        </ul>
+    </div>
+
+    <!-- PAGE 2 : MONDE, BIOMES, BOSS & ROADMAP -->
+    <div class="page">
+        <h2>IV. Progression : Les 4 Biomes Élémentaires</h2>
+        <p>Les biomes sont scellés par des portails sous la taverne. Vaincre le boss permet d'obtenir la Rune du biome suivant et déclenche un <strong>Service Gastronomique VIP</strong> le soir même (clients fortunés et critiques payant le triple).</p>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Biome</th>
+                    <th>Faune Associée</th>
+                    <th>Boss (Apex)</th>
+                    <th>Viande & Spécialité</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>1. Terre</strong></td>
+                    <td>Bovidés, ovidés, sangliers de roche</td>
+                    <td><strong>Le Minotaure</strong></td>
+                    <td>Côtes de bœuf mythiques (Rune d'Eau)</td>
+                </tr>
+                <tr>
+                    <td><strong>2. Eau</strong></td>
+                    <td>Poissons abyssaux, crustacés à pinces</td>
+                    <td><strong>Le Kraken</strong></td>
+                    <td>Tentacules géants (Rune d'Air)</td>
+                </tr>
+                <tr>
+                    <td><strong>3. Air</strong></td>
+                    <td>Créatures aviaires, poules géantes</td>
+                    <td><strong>Le Poulet Géant</strong></td>
+                    <td>Pilons d'or croustillants (Rune de Feu)</td>
+                </tr>
+                <tr>
+                    <td><strong>4. Feu</strong></td>
+                    <td>Enfers, bêtes de cendre et magma</td>
+                    <td><strong>Chef Possédé & Démon</strong></td>
+                    <td>Combat final & Dénouement narratif</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>V. Le Climax des 30 Jours & La Fin du Jeu</h2>
+        <div class="alert-box">
+            <strong>Le Pari de l'Usurier (Sauvetage Héroïque) :</strong> Si la dette n'est pas remboursée au Jour 30, pas de Game Over ! L'usurier propose d'effacer l'ardoise en échange d'un festin mythique : la viande du <strong>Dragon des Abysses</strong>. Un portail d'urgence s'ouvre pour une ultime chasse à quitte ou double.
+        </div>
+
+        <p><strong>Dénouement Final :</strong> Vaincu au fond du Biome Feu, le patron est libéré et son grand couteau est pacifié. Lors du festin final, le patron goûte le plat de l'apprenti, le déclare officiellement <strong>Chef</strong>, et lui transmet Kuko (qui s'éveille enfin en véritable couteau de chef) pour conquérir de nouveaux horizons.</p>
+
+        <h2>VI. Roadmap de Production Optimisée (9 Mois)</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Mois</th>
+                    <th>Jalon (Milestone)</th>
+                    <th>Livrables Clés (2 Devs + 1 Artiste)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>M1 - M2</strong></td>
+                    <td><strong>Vertical Slice</strong></td>
+                    <td>Contrôleur FPS + Cuisine physique + 1 monstre + Découpe QTE Kuko.</td>
+                </tr>
+                <tr>
+                    <td><strong>M3 - M4</strong></td>
+                    <td><strong>Taverne & Biomes 1-2</strong></td>
+                    <td>File d'attente complète, Minotaure & Kraken, système de contamination au sol.</td>
+                </tr>
+                <tr>
+                    <td><strong>M5 - M6</strong></td>
+                    <td><strong>Biomes 3-4 & Boss</strong></td>
+                    <td>Poulet Géant, Chef possédé avec puzzles d'arène, calendrier des 30 jours.</td>
+                </tr>
+                <tr>
+                    <td><strong>M7</strong></td>
+                    <td><strong>Alpha Feature-Complete</strong></td>
+                    <td>Combat du Dragon (Usurier), cinématiques, banquet final, boutique d'armes.</td>
+                </tr>
+                <tr>
+                    <td><strong>M8</strong></td>
+                    <td><strong>Beta & Juice</strong></td>
+                    <td>Sound design de cuisine croustillant, hitstop, équilibrage économie/dette.</td>
+                </tr>
+                <tr>
+                    <td><strong>M9</strong></td>
+                    <td><strong>QA, Steam & Sortie</strong></td>
+                    <td>Chasse aux bugs, optimisation 60 FPS, intégration Steamworks, Démo Next Fest.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="print-footer">
+            Document généré pour l'équipe de production • Wild Hole: Tavern & Cleaver • Confidentiel
+        </div>
+    </div>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,68 @@
+using UnityEngine;
+using System.Collections.Generic;
+
+public class GridSpawner : MonoBehaviour
+{
+    [Header("Grid Settings")]
+    public GameObject _cubePrefab;
+    public int _countX = 15;
+    public int _countZ = 15;
+    public float _spacing = 1.1f;
+
+    [Header("Wave Parameters")]
+    public float _waveAmplitude = 2.0f; 
+    public float _waveSpeed = 4.0f;
+    public float _waveFrequency = 0.5f;
+
+    [Header("Visuals")]
+    public Color _lowColor = Color.blue;
+    public Color _highColor = Color.cyan;
+
+    private List<Renderer> _cubeRenderers = new(); 
+    private Vector3 _gridCenter;
+
+    private void Start()
+    {
+        SpawnGrid();
+
+        float centerX = (_countX - 1) * _spacing / 2f;
+        float centerZ = (_countZ - 1) * _spacing / 2f;
+        _gridCenter = new Vector3(centerX, 0, centerZ);
+    }
+
+    private void SpawnGrid()
+    {
+        for (int x = 0; x < _countX; x++)
+        {
+            for (int z = 0; z < _countZ; z++)
+            {
+                Vector3 pos = new Vector3(x * _spacing, 0, z * _spacing);
+                GameObject newCube = Instantiate(_cubePrefab, pos, Quaternion.identity, transform);
+
+               
+                _cubeRenderers.Add(newCube.GetComponent<Renderer>());
+            }
+        }
+    }
+
+    private void Update()
+    {
+        for (int i = 0; i < _cubeRenderers.Count; i++)
+        {
+            Renderer renderer = _cubeRenderers[i];
+            Vector3 pos = renderer.transform.localPosition;
+
+            float distanceToCenter = Vector3.Distance(new Vector3(pos.x, 0, pos.z), _gridCenter);
+            float y = Mathf.Sin(Time.time * _waveSpeed - distanceToCenter * _waveFrequency) * _waveAmplitude;
+
+           
+            renderer.transform.localPosition = new Vector3(pos.x, y, pos.z);
+
+           
+            float t = (y + _waveAmplitude) / (_waveAmplitude * 2f);
+
+            
+            renderer.material.color = Color.Lerp(_lowColor, _highColor, t);
+        }
+    }
+}
