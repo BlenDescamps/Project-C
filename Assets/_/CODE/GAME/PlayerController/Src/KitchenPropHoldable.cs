@@ -13,6 +13,7 @@ namespace KJD.Game.PlayerController
         public Transform Transform => transform;
         public Rigidbody Rigidbody => _rigidbody;
         public bool IsBeingHeld => _isBeingHeld;
+        public bool IsBeingRecalled => _isBeingRecalled;
 
         #endregion
 
@@ -24,6 +25,11 @@ namespace KJD.Game.PlayerController
             _collider = GetComponent<Collider>();
             _defaultDrag = _rigidbody.linearDamping;
             _defaultAngularDrag = _rigidbody.angularDamping;
+
+            if (_collider != null)
+            {
+                _defaultIsTrigger = _collider.isTrigger;
+            }
         }
 
         #endregion
@@ -37,7 +43,7 @@ namespace KJD.Game.PlayerController
 
         public bool CanInteract(PlayerController player)
         {
-            return !_isBeingHeld;
+            return !_isBeingHeld && !_isBeingRecalled;
         }
 
         public void Interact(PlayerController player)
@@ -48,16 +54,22 @@ namespace KJD.Game.PlayerController
         public void OnPickedUp(Transform holdParent)
         {
             _isBeingHeld = true;
+            _isBeingRecalled = false;
             _rigidbody.useGravity = false;
             _rigidbody.linearDamping = 8f;
             _rigidbody.angularDamping = 8f;
 
-            if (_collider != null && holdParent != null)
+            if (_collider != null)
             {
-                CharacterController cc = holdParent.GetComponentInParent<CharacterController>();
-                if (cc != null)
+                _collider.isTrigger = _defaultIsTrigger;
+
+                if (holdParent != null)
                 {
-                    Physics.IgnoreCollision(_collider, cc, true);
+                    CharacterController cc = holdParent.GetComponentInParent<CharacterController>();
+                    if (cc != null)
+                    {
+                        Physics.IgnoreCollision(_collider, cc, true);
+                    }
                 }
             }
         }
@@ -65,9 +77,15 @@ namespace KJD.Game.PlayerController
         public void OnDropped()
         {
             _isBeingHeld = false;
+            _isBeingRecalled = false;
             _rigidbody.useGravity = true;
             _rigidbody.linearDamping = _defaultDrag;
             _rigidbody.angularDamping = _defaultAngularDrag;
+
+            if (_collider != null)
+            {
+                _collider.isTrigger = _defaultIsTrigger;
+            }
         }
 
         public void OnThrown(Vector3 force)
@@ -77,8 +95,34 @@ namespace KJD.Game.PlayerController
             _rigidbody.AddTorque(Random.insideUnitSphere * 6f, ForceMode.Impulse);
         }
 
-        public void OnRecalled(Transform holdParent, float duration)
+        public void OnRecallStarted(float dissolveDuration)
         {
+            _isBeingRecalled = true;
+
+            // Fige l'objet sur place pendant sa disparition au loin
+            if (_rigidbody != null)
+            {
+                _rigidbody.linearVelocity = Vector3.zero;
+                _rigidbody.angularVelocity = Vector3.zero;
+                _rigidbody.useGravity = false;
+            }
+
+            if (_collider != null)
+            {
+                _collider.isTrigger = true;
+            }
+
+            if (_apparitionEffect == null) _apparitionEffect = GetComponent<ApparitionEffect>();
+            if (_apparitionEffect != null)
+            {
+                _apparitionEffect.PlayDissolve(dissolveDuration);
+            }
+        }
+
+        public void OnRecalled(Transform holdParent, float apparitionDuration)
+        {
+            _isBeingRecalled = false;
+
             if (_rigidbody != null)
             {
                 _rigidbody.linearVelocity = Vector3.zero;
@@ -93,7 +137,7 @@ namespace KJD.Game.PlayerController
             if (_apparitionEffect == null) _apparitionEffect = GetComponent<ApparitionEffect>();
             if (_apparitionEffect != null)
             {
-                _apparitionEffect.PlayApparition(duration);
+                _apparitionEffect.PlayApparition(apparitionDuration);
             }
         }
 
@@ -109,6 +153,8 @@ namespace KJD.Game.PlayerController
         private Collider _collider;
         private ApparitionEffect _apparitionEffect;
         private bool _isBeingHeld;
+        private bool _isBeingRecalled;
+        private bool _defaultIsTrigger;
         private float _defaultDrag;
         private float _defaultAngularDrag;
 

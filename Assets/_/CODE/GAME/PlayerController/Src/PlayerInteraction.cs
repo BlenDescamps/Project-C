@@ -14,6 +14,7 @@ namespace KJD.Game.PlayerController
         public bool IsHoldingItem => _heldItem != null;
         public bool IsChargingThrow => _isChargingThrow;
         public float CurrentChargeRatio => _chargeRatio;
+        public bool IsRecalling => _isRecalling;
 
         #endregion
 
@@ -42,6 +43,12 @@ namespace KJD.Game.PlayerController
         {
             DisableInputActions();
             CancelThrowCharge();
+            if (_recallCoroutine != null)
+            {
+                StopCoroutine(_recallCoroutine);
+                _recallCoroutine = null;
+                _isRecalling = false;
+            }
         }
 
         private void Update()
@@ -110,7 +117,13 @@ namespace KJD.Game.PlayerController
             }
 
             // 4. Indication de rappel si les mains sont libres
-            if (_heldItem == null && _lastInteractedItem != null)
+            if (_isRecalling)
+            {
+                labelStyle.fontSize = 12;
+                labelStyle.normal.textColor = new Color(0.3f, 0.85f, 1f, 1f);
+                GUI.Label(new Rect(centerX - 150, centerY + 45, 300, 20), "⚡ Rappel magique en cours...", labelStyle);
+            }
+            else if (_heldItem == null && _lastInteractedItem != null)
             {
                 labelStyle.fontSize = 11;
                 labelStyle.normal.textColor = new Color(0.4f, 0.9f, 1f, 0.85f);
@@ -174,7 +187,7 @@ namespace KJD.Game.PlayerController
 
         private void HandleThrowCharging()
         {
-            if (_heldItem == null)
+            if (_heldItem == null || _isRecalling)
             {
                 CancelThrowCharge();
                 return;
@@ -226,6 +239,8 @@ namespace KJD.Game.PlayerController
 
         public void TryInteract()
         {
+            if (_isRecalling) return;
+
             if (_heldItem != null && _currentTarget != null)
             {
                 _currentTarget.Interact(_playerController);
@@ -261,7 +276,7 @@ namespace KJD.Game.PlayerController
 
         public void DropHeldItem()
         {
-            if (_heldItem == null) return;
+            if (_heldItem == null || _isRecalling) return;
 
             CancelThrowCharge();
 
@@ -299,11 +314,11 @@ namespace KJD.Game.PlayerController
         }
 
         /// <summary>
-        /// Rappelle l'objet lancé directement dans la main avec effet d'apparition (Touche Q / LB).
+        /// Rappelle l'objet : dissolution magique au loin puis réapparition progressive dans la main (Touche Q / LB).
         /// </summary>
         public void TryRecallItem()
         {
-            if (_heldItem != null) return;
+            if (_heldItem != null || _isRecalling) return;
 
             IHoldable itemToRecall = _lastInteractedItem;
 
@@ -314,11 +329,47 @@ namespace KJD.Game.PlayerController
 
             if (itemToRecall != null)
             {
-                _heldItem = itemToRecall;
-                _lastInteractedItem = itemToRecall;
-                _heldItem.OnRecalled(_holdPoint, _recallApparitionDuration);
-                Debug.Log($"<b>[PlayerInteraction]</b> ⚡ Objet rappelé dans la main : {itemToRecall.Transform.name} !");
+                if (_recallCoroutine != null) StopCoroutine(_recallCoroutine);
+                _recallCoroutine = StartCoroutine(RecallSequenceRoutine(itemToRecall));
             }
+        }
+
+        private IEnumerator RecallSequenceRoutine(IHoldable itemToRecall)
+        {
+            _isRecalling = true;
+            _lastInteractedItem = itemToRecall;
+
+            Debug.Log($"<b>[PlayerInteraction]</b> ⚡ Dissolution au loin de : {itemToRecall.Transform.name} ({_recallDissolveDuration:F2}s)...");
+            itemToRecall.OnRecallStarted(_recallDissolveDuration);
+
+            float elapsed = 0f;
+            while (elapsed < _recallDissolveDuration)
+            {
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+
+            // Sécurité si l'objet ou holdPoint a disparu
+            if (itemToRecall == null || itemToRecall.Transform == null || _holdPoint == null)
+            {
+                _isRecalling = false;
+                _recallCoroutine = null;
+                yield break;
+            }
+
+            Debug.Log($"<b>[PlayerInteraction]</b> ✨ Matérialisation en main de : {itemToRecall.Transform.name} ({_recallApparitionDuration:F2}s) !");
+            _heldItem = itemToRecall;
+            _heldItem.OnRecalled(_holdPoint, _recallApparitionDuration);
+
+            elapsed = 0f;
+            while (elapsed < _recallApparitionDuration)
+            {
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+
+            _isRecalling = false;
+            _recallCoroutine = null;
         }
 
         private IHoldable FindClosestHoldable()
@@ -559,9 +610,13 @@ namespace KJD.Game.PlayerController
         [SerializeField] private float _maxShakeAmplitude = 0.045f;
 
         [Header("--- RAPPEL D'OBJET (Recall / Apparition) ---")]
-        [Tooltip("Durée de l'effet d'apparition shader lors du rappel")]
-        [Range(0.1f, 1.5f)]
-        [SerializeField] private float _recallApparitionDuration = 0.45f;
+        [Tooltip("Durée de la dissolution de l'objet au loin avant son rappel")]
+        [Range(0.1f, 2f)]
+        [SerializeField] private float _recallDissolveDuration = 0.5f;
+
+        [Tooltip("Durée de la réapparition (matérialisation) de l'objet dans la main")]
+        [Range(0.2f, 3f)]
+        [SerializeField] private float _recallApparitionDuration = 0.85f;
 
         [Header("--- DEBUG & RETOUR VISUEL ---")]
         [Tooltip("Affiche un réticule au centre, la jauge de charge et le texte d'aide à l'écran")]
@@ -575,6 +630,8 @@ namespace KJD.Game.PlayerController
         private IHoldable _lastInteractedItem;
         private int _lastInteractFrame = -1;
         private int _lastRecallFrame = -1;
+        private bool _isRecalling;
+        private Coroutine _recallCoroutine;
 
         // Variables de charge
         private bool _isChargingThrow;

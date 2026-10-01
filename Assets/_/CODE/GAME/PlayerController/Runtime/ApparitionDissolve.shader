@@ -125,14 +125,16 @@ Shader "KJD/ApparitionDissolve"
                 // 1. Calcul du bruit pour la découpe
                 float noiseVal = getNoise(input.positionWS, input.uv);
 
-                // Découpe clip() : quand _DissolveAmount passe de 1.0 (invisible) à 0.0 (visible)
-                // L'objet "se matérialise" (apparition)
+                // Découpe clip() : 
+                // Si _DissolveAmount >= 0.999, l'objet est 100% invisible
+                if (_DissolveAmount >= 0.999) clip(-1);
                 float threshold = _DissolveAmount;
                 clip((noiseVal - threshold) + 0.0001);
 
                 // 2. Calcul du bord magique lumineux
                 float edgeFactor = 1.0 - saturate((noiseVal - threshold) / max(_EdgeWidth, 0.001));
                 edgeFactor = pow(edgeFactor, 1.5);
+                edgeFactor *= step(0.005, _DissolveAmount); // Aucun liseré quand l'objet est intact (0)
                 half3 edgeGlow = _EdgeColor.rgb * edgeFactor * _EmissionIntensity;
 
                 // 3. Éclairage URP Diffuse basique
@@ -226,6 +228,7 @@ Shader "KJD/ApparitionDissolve"
 
             half4 fragShadow(Varyings input) : SV_Target
             {
+                if (_DissolveAmount >= 0.999) clip(-1);
                 float n = noise3D(input.positionWS * _NoiseScale) * 0.65;
                 n += noise3D(input.positionWS * _NoiseScale * 2.1) * 0.35;
                 clip(n - _DissolveAmount);
