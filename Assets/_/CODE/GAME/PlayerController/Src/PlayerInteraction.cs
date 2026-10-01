@@ -16,6 +16,30 @@ namespace KJD.Game.PlayerController
         public bool IsChargingThrow => _isChargingThrow;
         public float CurrentChargeRatio => _chargeRatio;
         public bool IsRecalling => _isRecalling;
+        public PlayerHotbar Hotbar => _hotbar;
+
+        public void OnItemStashedByHotbar(IHoldable item)
+        {
+            if (_heldItem == item)
+            {
+                CancelThrowCharge();
+                _heldItem = null;
+                if (item != null && item.Transform != null)
+                {
+                    item.Transform.gameObject.SetActive(false);
+                }
+            }
+        }
+
+        public void OnItemUnstashedByHotbar(IHoldable item)
+        {
+            if (item != null && item.Transform != null)
+            {
+                item.Transform.gameObject.SetActive(true);
+                _heldItem = item;
+                _heldItem.OnPickedUp(_holdPoint);
+            }
+        }
 
         #endregion
 
@@ -24,6 +48,7 @@ namespace KJD.Game.PlayerController
         private void Awake()
         {
             _playerController = GetComponent<PlayerController>();
+            _hotbar = GetComponent<PlayerHotbar>();
             EnsureCameraReference();
             EnsureHoldPoint();
             ResolveInputBindings();
@@ -272,7 +297,13 @@ namespace KJD.Game.PlayerController
             _heldItem = item;
             _lastInteractedItem = item;
             _heldItem.OnPickedUp(_holdPoint);
-            Debug.Log($"<b>[PlayerInteraction]</b> Objet ramassé : {item.Transform.name}");
+
+            if (_hotbar != null)
+            {
+                _hotbar.AssignItemToActiveOrFirstSlot(item);
+            }
+
+            Debug.Log($"<b>[PlayerInteraction]</b> Objet ramassé et équipé en Hotbar : {item.Transform.name}");
         }
 
         public void DropHeldItem()
@@ -286,6 +317,11 @@ namespace KJD.Game.PlayerController
             _heldItem = null;
 
             itemToDrop.OnDropped();
+
+            if (_hotbar != null)
+            {
+                _hotbar.NotifyItemDropped(itemToDrop);
+            }
 
             if (itemToDrop.Rigidbody != null)
             {
@@ -307,6 +343,11 @@ namespace KJD.Game.PlayerController
             _heldItem = null;
             CancelThrowCharge();
 
+            if (_hotbar != null)
+            {
+                _hotbar.NotifyItemThrown(itemToThrow);
+            }
+
             Vector3 throwDirection = _cameraTransform != null ? _cameraTransform.forward : transform.forward;
             Vector3 finalThrowVelocity = (throwDirection * calculatedForce) + (_playerController.Velocity * _playerMomentumInheritance);
 
@@ -321,7 +362,19 @@ namespace KJD.Game.PlayerController
         {
             if (_heldItem != null || _isRecalling) return;
 
-            IHoldable itemToRecall = _lastInteractedItem;
+            IHoldable itemToRecall = null;
+
+            // 1. Privilégie l'objet lié au slot actif de la Hotbar
+            if (_hotbar != null)
+            {
+                itemToRecall = _hotbar.GetRecallableItemForActiveSlot();
+            }
+
+            // 2. Fallbacks
+            if (itemToRecall == null)
+            {
+                itemToRecall = _lastInteractedItem;
+            }
 
             if (itemToRecall == null)
             {
@@ -361,6 +414,11 @@ namespace KJD.Game.PlayerController
             Debug.Log($"<b>[PlayerInteraction]</b> ✨ Matérialisation en main de : {itemToRecall.Transform.name} ({_recallApparitionDuration:F2}s) !");
             _heldItem = itemToRecall;
             _heldItem.OnRecalled(_holdPoint, _recallApparitionDuration);
+
+            if (_hotbar != null)
+            {
+                _hotbar.NotifyItemRecalled(itemToRecall);
+            }
 
             elapsed = 0f;
             while (elapsed < _recallApparitionDuration)
@@ -625,6 +683,7 @@ namespace KJD.Game.PlayerController
 
         // Références internes
         private PlayerController _playerController;
+        private PlayerHotbar _hotbar;
         private Transform _cameraTransform;
         private IInteractable _currentTarget;
         private IHoldable _heldItem;

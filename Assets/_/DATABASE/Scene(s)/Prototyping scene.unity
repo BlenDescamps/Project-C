@@ -134,6 +134,7 @@ GameObject:
   - component: {fileID: 162941203}
   - component: {fileID: 162941202}
   - component: {fileID: 162941201}
+  - component: {fileID: 162941208}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -141,6 +142,25 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!114 &162941208
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 162941200}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5a8e1047bc394a1dae8290fedcba1234, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::KJD.Game.PlayerController.PlayerHotbar
+  _slotCount: 5
+  _showHotbarUI: 1
+  _allowMouseScrollWheel: 1
+  _allowNumberKeys: 1
+  _slotBackgroundColor: {r: 0.12, g: 0.12, b: 0.15, a: 0.85}
+  _activeSlotBorderColor: {r: 1, g: 0.82, b: 0.2, a: 0.95}
+  _recallableColor: {r: 0.35, g: 0.9, b: 1, a: 1}
 --- !u!114 &162941201
 MonoBehaviour:
   m_ObjectHideFlags: 0
