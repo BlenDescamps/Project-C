@@ -33,9 +33,11 @@ namespace KJD.Game.PlayerController
         /// <summary>
         /// Déclenche l'animation d'apparition magique (l'objet se reforme dans les mains du joueur).
         /// </summary>
-        /// <param name="duration">Durée de l'effet en secondes.</param>
-        public void PlayApparition(float duration = 0.4f)
+        /// <param name="duration">Durée de l'effet en secondes (si <= 0, utilise _defaultApparitionDuration).</param>
+        public void PlayApparition(float duration = -1f)
         {
+            if (duration <= 0f) duration = _defaultApparitionDuration;
+
             if (_renderer == null) _renderer = GetComponentInChildren<Renderer>();
             if (_renderer == null) return;
 

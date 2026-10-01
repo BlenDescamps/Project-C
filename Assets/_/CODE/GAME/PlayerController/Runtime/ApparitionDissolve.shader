@@ -219,7 +219,7 @@ Shader "KJD/ApparitionDissolve"
                 float3 positionWS = ApplyShadowBias(posInputs.positionWS, normInputs.normalWS, _MainLightPosition.xyz);
                 output.positionCS = TransformWorldToHClip(positionWS);
                 output.positionWS = posInputs.positionWS;
-                output.uv = TRANSFORM_TEX(input.uv, _BaseMap_ST);
+                output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
 
                 return output;
             }
