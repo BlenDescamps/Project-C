@@ -70,7 +70,7 @@ namespace KJD.Game.PlayerController
                 fontStyle = FontStyle.Bold
             };
 
-            // Jauge de charge du lancer
+            // 1. Jauge de charge du lancer
             if (_isChargingThrow && _heldItem != null)
             {
                 float barWidth = 140f;
@@ -93,7 +93,7 @@ namespace KJD.Game.PlayerController
                 string chargeText = Mathf.RoundToInt(_chargeRatio * 100f) + "%";
                 GUI.Label(new Rect(centerX - 50, barY + 12, 100, 20), chargeText, labelStyle);
             }
-            // Prompt d'interaction quand on vise un objet
+            // 2. Prompt d'interaction quand on vise un objet
             else if (_currentTarget != null)
             {
                 labelStyle.fontSize = 14;
@@ -101,12 +101,20 @@ namespace KJD.Game.PlayerController
                 string prompt = _currentTarget.GetInteractionPrompt();
                 GUI.Label(new Rect(centerX - 150, centerY + 18, 300, 30), "[E / X] " + prompt, labelStyle);
             }
-            // Indication quand on porte un objet
+            // 3. Indication quand on porte un objet
             else if (_heldItem != null)
             {
                 labelStyle.fontSize = 12;
                 labelStyle.normal.textColor = new Color(1f, 0.9f, 0.4f, 0.9f);
                 GUI.Label(new Rect(centerX - 200, centerY + 18, 400, 30), "[Maintenir Clic G / RT] Charger Lancer  •  [Clic D / LT] Poser", labelStyle);
+            }
+
+            // 4. Indication de rappel si les mains sont libres
+            if (_heldItem == null && _lastInteractedItem != null)
+            {
+                labelStyle.fontSize = 11;
+                labelStyle.normal.textColor = new Color(0.4f, 0.9f, 1f, 0.85f);
+                GUI.Label(new Rect(centerX - 150, centerY + 45, 300, 20), "[Q / LB] Rappeler l'objet", labelStyle);
             }
 
             GUI.color = oldColor;
@@ -177,14 +185,11 @@ namespace KJD.Game.PlayerController
             if (isThrowPressed)
             {
                 _isChargingThrow = true;
-
-                // Vitesse de charge réglable (temps pour atteindre 100%)
                 float speed = _chargeTime > 0.01f ? (1f / _chargeTime) : 10f;
                 _chargeRatio = Mathf.Clamp01(_chargeRatio + Time.deltaTime * speed);
             }
             else if (_isChargingThrow)
             {
-                // Le bouton vient d'être relâché : on déclenche le lancer avec la force accumulée !
                 ExecuteChargedThrow();
             }
         }
@@ -195,7 +200,7 @@ namespace KJD.Game.PlayerController
 
             Vector3 targetPos = _holdPoint.position;
 
-            // Ajout de la secousse de l'objet pendant la charge (augmente avec la puissance)
+            // Secousse de l'objet pendant la charge
             if (_isChargingThrow && _chargeRatio > 0.05f)
             {
                 float shakeMagnitude = _maxShakeAmplitude * (_shakeIntensityPercentage / 100f) * _chargeRatio;
@@ -249,6 +254,7 @@ namespace KJD.Game.PlayerController
 
             CancelThrowCharge();
             _heldItem = item;
+            _lastInteractedItem = item;
             _heldItem.OnPickedUp(_holdPoint);
             Debug.Log($"<b>[PlayerInteraction]</b> Objet ramassé : {item.Transform.name}");
         }
@@ -260,6 +266,7 @@ namespace KJD.Game.PlayerController
             CancelThrowCharge();
 
             IHoldable itemToDrop = _heldItem;
+            _lastInteractedItem = itemToDrop;
             _heldItem = null;
 
             itemToDrop.OnDropped();
@@ -277,10 +284,10 @@ namespace KJD.Game.PlayerController
         {
             if (_heldItem == null) return;
 
-            // Interpolation entre la force minimale et maximale selon la charge
             float calculatedForce = Mathf.Lerp(_minThrowForce, _maxThrowForce, _chargeRatio);
 
             IHoldable itemToThrow = _heldItem;
+            _lastInteractedItem = itemToThrow;
             _heldItem = null;
             CancelThrowCharge();
 
@@ -289,6 +296,50 @@ namespace KJD.Game.PlayerController
 
             itemToThrow.OnThrown(finalThrowVelocity);
             Debug.Log($"<b>[PlayerInteraction]</b> Lancer exécuté à {Mathf.RoundToInt(_chargeRatio * 100f)}% de force ({calculatedForce:F1} m/s) !");
+        }
+
+        /// <summary>
+        /// Rappelle l'objet lancé directement dans la main avec effet d'apparition (Touche Q / LB).
+        /// </summary>
+        public void TryRecallItem()
+        {
+            if (_heldItem != null) return;
+
+            IHoldable itemToRecall = _lastInteractedItem;
+
+            if (itemToRecall == null)
+            {
+                itemToRecall = FindClosestHoldable();
+            }
+
+            if (itemToRecall != null)
+            {
+                _heldItem = itemToRecall;
+                _lastInteractedItem = itemToRecall;
+                _heldItem.OnRecalled(_holdPoint, _recallApparitionDuration);
+                Debug.Log($"<b>[PlayerInteraction]</b> ⚡ Objet rappelé dans la main : {itemToRecall.Transform.name} !");
+            }
+        }
+
+        private IHoldable FindClosestHoldable()
+        {
+            KitchenPropHoldable[] props = UnityEngine.Object.FindObjectsByType<KitchenPropHoldable>(FindObjectsSortMode.None);
+            IHoldable closest = null;
+            float minDistance = float.MaxValue;
+            Vector3 playerPos = transform.position;
+
+            foreach (var prop in props)
+            {
+                if (prop.IsBeingHeld) continue;
+                float d = Vector3.Distance(playerPos, prop.transform.position);
+                if (d < minDistance)
+                {
+                    minDistance = d;
+                    closest = prop;
+                }
+            }
+
+            return closest;
         }
 
         private void CancelThrowCharge()
@@ -344,6 +395,7 @@ namespace KJD.Game.PlayerController
             _activeInteractAction = _interactAction != null ? _interactAction.action : null;
             _activeThrowAction = _throwAction != null ? _throwAction.action : null;
             _activeDropAction = _dropAction != null ? _dropAction.action : null;
+            _activeRecallAction = _recallAction != null ? _recallAction.action : null;
 
             if (TryGetComponent<PlayerInput>(out var playerInput) && playerInput.actions != null)
             {
@@ -353,6 +405,7 @@ namespace KJD.Game.PlayerController
                     if (_activeInteractAction == null) _activeInteractAction = playerMap.FindAction("Interact");
                     if (_activeThrowAction == null) _activeThrowAction = playerMap.FindAction("Attack");
                     if (_activeDropAction == null) _activeDropAction = playerMap.FindAction("Crouch");
+                    if (_activeRecallAction == null) _activeRecallAction = playerMap.FindAction("Recall");
                 }
             }
         }
@@ -378,6 +431,13 @@ namespace KJD.Game.PlayerController
                 _activeDropAction.Enable();
                 _activeDropAction.performed += OnDropTriggered;
             }
+
+            if (_activeRecallAction != null)
+            {
+                _activeRecallAction.Enable();
+                _activeRecallAction.performed += OnRecallTriggered;
+                _activeRecallAction.started += OnRecallTriggered;
+            }
         }
 
         private void DisableInputActions()
@@ -399,6 +459,13 @@ namespace KJD.Game.PlayerController
                 _activeDropAction.performed -= OnDropTriggered;
                 _activeDropAction.Disable();
             }
+
+            if (_activeRecallAction != null)
+            {
+                _activeRecallAction.performed -= OnRecallTriggered;
+                _activeRecallAction.started -= OnRecallTriggered;
+                _activeRecallAction.Disable();
+            }
         }
 
         private void OnInteractTriggered(InputAction.CallbackContext context)
@@ -414,6 +481,14 @@ namespace KJD.Game.PlayerController
             DropHeldItem();
         }
 
+        private void OnRecallTriggered(InputAction.CallbackContext context)
+        {
+            if (Time.frameCount == _lastRecallFrame) return;
+            _lastRecallFrame = Time.frameCount;
+
+            TryRecallItem();
+        }
+
         #endregion
 
         #region Private and Protected
@@ -427,6 +502,9 @@ namespace KJD.Game.PlayerController
 
         [Tooltip("Action de dépose douce (Clic Droit / Gâchette Gauche LT)")]
         [SerializeField] private InputActionReference _dropAction;
+
+        [Tooltip("Action de rappel de l'objet (Q au clavier / LB à la manette)")]
+        [SerializeField] private InputActionReference _recallAction;
 
         [Header("--- DÉTECTION & PORTÉE ---")]
         [Tooltip("Distance maximale d'interaction en mètres")]
@@ -480,6 +558,11 @@ namespace KJD.Game.PlayerController
         [Range(0.01f, 0.1f)]
         [SerializeField] private float _maxShakeAmplitude = 0.045f;
 
+        [Header("--- RAPPEL D'OBJET (Recall / Apparition) ---")]
+        [Tooltip("Durée de l'effet d'apparition shader lors du rappel")]
+        [Range(0.1f, 1.5f)]
+        [SerializeField] private float _recallApparitionDuration = 0.45f;
+
         [Header("--- DEBUG & RETOUR VISUEL ---")]
         [Tooltip("Affiche un réticule au centre, la jauge de charge et le texte d'aide à l'écran")]
         [SerializeField] private bool _showDebugCrosshair = true;
@@ -489,7 +572,9 @@ namespace KJD.Game.PlayerController
         private Transform _cameraTransform;
         private IInteractable _currentTarget;
         private IHoldable _heldItem;
+        private IHoldable _lastInteractedItem;
         private int _lastInteractFrame = -1;
+        private int _lastRecallFrame = -1;
 
         // Variables de charge
         private bool _isChargingThrow;
@@ -498,6 +583,7 @@ namespace KJD.Game.PlayerController
         private InputAction _activeInteractAction;
         private InputAction _activeThrowAction;
         private InputAction _activeDropAction;
+        private InputAction _activeRecallAction;
 
         #endregion
     }

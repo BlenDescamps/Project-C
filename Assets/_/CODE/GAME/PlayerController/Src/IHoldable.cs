@@ -13,5 +13,6 @@ namespace KJD.Game.PlayerController
         void OnPickedUp(Transform holdParent);
         void OnDropped();
         void OnThrown(Vector3 force);
+        void OnRecalled(Transform holdParent, float duration);
     }
 }

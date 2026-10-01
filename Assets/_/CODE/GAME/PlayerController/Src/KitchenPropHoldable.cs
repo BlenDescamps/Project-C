@@ -77,6 +77,26 @@ namespace KJD.Game.PlayerController
             _rigidbody.AddTorque(Random.insideUnitSphere * 6f, ForceMode.Impulse);
         }
 
+        public void OnRecalled(Transform holdParent, float duration)
+        {
+            if (_rigidbody != null)
+            {
+                _rigidbody.linearVelocity = Vector3.zero;
+                _rigidbody.angularVelocity = Vector3.zero;
+            }
+
+            transform.position = holdParent.position;
+            transform.rotation = holdParent.rotation;
+
+            OnPickedUp(holdParent);
+
+            if (_apparitionEffect == null) _apparitionEffect = GetComponent<ApparitionEffect>();
+            if (_apparitionEffect != null)
+            {
+                _apparitionEffect.PlayApparition(duration);
+            }
+        }
+
         #endregion
 
         #region Private and Protected
@@ -87,6 +107,7 @@ namespace KJD.Game.PlayerController
 
         private Rigidbody _rigidbody;
         private Collider _collider;
+        private ApparitionEffect _apparitionEffect;
         private bool _isBeingHeld;
         private float _defaultDrag;
         private float _defaultAngularDrag;
