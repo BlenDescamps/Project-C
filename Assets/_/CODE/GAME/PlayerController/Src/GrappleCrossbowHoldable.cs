@@ -2,9 +2,18 @@ using UnityEngine;
 
 namespace KJD.Game.PlayerController
 {
+    public enum GrappleState
+    {
+        Ready,       // Dans le cylindre, prêt au tir
+        Flying,      // En plein vol vers la cible avec câble déroulé
+        Hooked,      // Accroché à la cible (tension et rembobinage actifs)
+        Retracting   // En cours de retour vers le cylindre
+    }
+
     /// <summary>
     /// Arbalète grappin prototypée sur un Cylindre.
     /// Équipable en main via la Hotbar. Clic gauche pour tirer/relâcher, Clic droit pour ré-enrouler la corde et tracter l'objet.
+    /// Lors du tir, la tête du grappin est propulsée visuellement dans l'air avec la corde qui se déroule derrière elle.
     /// </summary>
     [RequireComponent(typeof(Rigidbody))]
     [RequireComponent(typeof(GrappleCable))]
@@ -15,7 +24,8 @@ namespace KJD.Game.PlayerController
         public Transform Transform => transform;
         public Rigidbody Rigidbody => _rigidbody;
         public bool IsBeingHeld => _isBeingHeld;
-        public bool IsHooked => _isHooked;
+        public bool IsHooked => _state == GrappleState.Hooked;
+        public GrappleState State => _state;
         public float CurrentRopeLength => _currentRopeLength;
 
         // ICustomActionHoldable
@@ -24,12 +34,22 @@ namespace KJD.Game.PlayerController
 
         public string GetPrimaryActionPrompt()
         {
-            return _isHooked ? "[Clic G] Relâcher Grappin" : "[Clic G] Tirer Grappin";
+            switch (_state)
+            {
+                case GrappleState.Flying:
+                    return "[Clic G] Annuler Tir";
+                case GrappleState.Hooked:
+                    return "[Clic G] Relâcher Grappin";
+                case GrappleState.Retracting:
+                    return "Rembobinage...";
+                default:
+                    return "[Clic G] Tirer Grappin";
+            }
         }
 
         public string GetSecondaryActionPrompt()
         {
-            return _isHooked ? "[Clic D (Maintenir)] Re-enrouler" : "[Clic D] Poser";
+            return _state == GrappleState.Hooked ? "[Clic D (Maintenir)] Re-enrouler" : "[Clic D] Poser";
         }
 
         #endregion
@@ -44,30 +64,103 @@ namespace KJD.Game.PlayerController
             _defaultScale = transform.localScale;
 
             EnsureMuzzlePoint();
+            EnsureHookHead();
+            DockHookHead();
             _cable.DisableCable();
+        }
+
+        private void OnEnable()
+        {
+            if (_hookHead != null)
+            {
+                _hookHead.gameObject.SetActive(true);
+            }
+        }
+
+        private void Update()
+        {
+            if (_state == GrappleState.Flying)
+            {
+                UpdateFlyingState(Time.deltaTime);
+            }
+            else if (_state == GrappleState.Retracting)
+            {
+                UpdateRetractingState(Time.deltaTime);
+            }
         }
 
         private void FixedUpdate()
         {
-            if (!_isHooked) return;
+            if (_state != GrappleState.Hooked) return;
+
+            // Si la cible accrochée a été détruite entre-temps
+            if (_hookedTransform == null && _hookedRigidbody != null)
+            {
+                ReleaseGrapple();
+                return;
+            }
 
             UpdateTensionPhysics();
         }
 
         private void LateUpdate()
         {
-            if (!_isHooked) return;
-
             Vector3 muzzlePos = GetMuzzlePosition();
-            Vector3 anchorPos = GetCurrentAnchorPosition();
+            Quaternion muzzleRot = GetMuzzleRotation();
 
-            _cable.UpdateCable(muzzlePos, anchorPos, _currentRopeLength, _isReeling);
-            _isReeling = false;
+            switch (_state)
+            {
+                case GrappleState.Ready:
+                    if (_hookHead != null)
+                    {
+                        _hookHead.position = muzzlePos;
+                        _hookHead.rotation = muzzleRot;
+                        _hookHead.localScale = _hookHeadWorldScale;
+                    }
+                    break;
+
+                case GrappleState.Flying:
+                case GrappleState.Retracting:
+                    if (_hookHead != null)
+                    {
+                        float dist = Vector3.Distance(muzzlePos, _hookHead.position);
+                        _cable.UpdateCable(muzzlePos, _hookHead.position, dist, _state == GrappleState.Retracting);
+                    }
+                    break;
+
+                case GrappleState.Hooked:
+                    Vector3 anchorPos = GetCurrentAnchorPosition();
+                    if (_hookHead != null)
+                    {
+                        _hookHead.position = anchorPos;
+                        _hookHead.localScale = _hookHeadWorldScale;
+                    }
+                    _cable.UpdateCable(muzzlePos, anchorPos, _currentRopeLength, _isReeling);
+                    _isReeling = false;
+                    break;
+            }
         }
 
         private void OnDisable()
         {
             ReleaseGrapple();
+            DockHookHead();
+            if (_hookHead != null)
+            {
+                _hookHead.gameObject.SetActive(false);
+            }
+            if (_cable != null)
+            {
+                _cable.DisableCable();
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (_hookHead != null)
+            {
+                Destroy(_hookHead.gameObject);
+            }
         }
 
         #endregion
@@ -92,6 +185,7 @@ namespace KJD.Game.PlayerController
         public void OnPickedUp(Transform holdParent)
         {
             _isBeingHeld = true;
+            _playerRoot = holdParent != null ? holdParent.root : null;
 
             _rigidbody.useGravity = false;
             _rigidbody.isKinematic = true;
@@ -109,12 +203,16 @@ namespace KJD.Game.PlayerController
                 transform.localRotation = Quaternion.Euler(_heldLocalRotation);
                 transform.localScale = _heldScale;
             }
+
+            DockHookHead();
         }
 
         public void OnDropped()
         {
             _isBeingHeld = false;
+            _playerRoot = null;
             ReleaseGrapple();
+            DockHookHead();
 
             transform.SetParent(null);
             transform.localScale = _defaultScale;
@@ -138,6 +236,8 @@ namespace KJD.Game.PlayerController
         public void OnRecallStarted(float dissolveDuration)
         {
             ReleaseGrapple();
+            DockHookHead();
+
             _rigidbody.linearVelocity = Vector3.zero;
             _rigidbody.angularVelocity = Vector3.zero;
             _rigidbody.useGravity = false;
@@ -166,11 +266,11 @@ namespace KJD.Game.PlayerController
 
         public void OnPrimaryActionStarted()
         {
-            if (!_isHooked)
+            if (_state == GrappleState.Ready)
             {
                 FireGrapple();
             }
-            else
+            else if (_state == GrappleState.Flying || _state == GrappleState.Hooked)
             {
                 ReleaseGrapple();
             }
@@ -183,7 +283,7 @@ namespace KJD.Game.PlayerController
 
         public void OnSecondaryActionHeld()
         {
-            if (_isHooked)
+            if (_state == GrappleState.Hooked)
             {
                 ReelIn();
             }
@@ -196,51 +296,65 @@ namespace KJD.Game.PlayerController
         #region Main API
 
         /// <summary>
-        /// Tire le grappin vers l'avant de la caméra.
+        /// Lance la tête de harpon vers la cible visée avec déroulement de la corde.
         /// </summary>
         public void FireGrapple()
         {
+            if (_state != GrappleState.Ready) return;
+
             Camera cam = Camera.main;
             if (cam == null) cam = GetComponentInParent<Camera>();
             if (cam == null) return;
 
-            Ray ray = new Ray(cam.transform.position, cam.transform.forward);
+            EnsureMuzzlePoint();
+            EnsureHookHead();
 
-            if (Physics.Raycast(ray, out RaycastHit hit, _maxRange, _grappleMask, QueryTriggerInteraction.Ignore))
+            Vector3 muzzlePos = GetMuzzlePosition();
+
+            // Point ciblé au centre du réticule (visée convergente FPS)
+            Vector3 targetAimPoint = cam.transform.position + (cam.transform.forward * _maxRange);
+            if (Physics.Raycast(cam.transform.position, cam.transform.forward, out RaycastHit camHit, _maxRange, _grappleMask, QueryTriggerInteraction.Ignore))
             {
-                // Évite de s'accrocher à soi-même
-                if (hit.collider.transform.root == transform.root) return;
-
-                _isHooked = true;
-                _hookedRigidbody = hit.collider.GetComponentInParent<Rigidbody>();
-                _hookedTransform = hit.collider.transform;
-                _localAnchorOffset = _hookedTransform.InverseTransformPoint(hit.point);
-                _staticWorldAnchor = hit.point;
-
-                Vector3 muzzlePos = GetMuzzlePosition();
-                _currentRopeLength = Vector3.Distance(muzzlePos, hit.point);
-
-                _cable.EnableCable();
-                Debug.Log($"<b>[GrappleCrossbow]</b> 🎯 Harpon accroché sur <b>{hit.collider.name}</b> (Distance : {_currentRopeLength:F1}m)");
+                // Vérifie que le rayon de visée ne touche pas le joueur lui-même
+                if (_playerRoot == null || camHit.collider.transform.root != _playerRoot)
+                {
+                    targetAimPoint = camHit.point;
+                }
             }
-            else
+
+            _flyDirection = (targetAimPoint - muzzlePos).normalized;
+            if (_flyDirection.sqrMagnitude < 0.001f)
             {
-                Debug.Log("<b>[GrappleCrossbow]</b> Tir dans le vide (hors de portée).");
+                _flyDirection = cam.transform.forward;
             }
+
+            _hookHead.position = muzzlePos;
+            _hookHead.rotation = Quaternion.LookRotation(_flyDirection);
+            _hookHead.localScale = _hookHeadWorldScale;
+            _hookHead.gameObject.SetActive(true);
+
+            _distanceTraveled = 0f;
+            _state = GrappleState.Flying;
+
+            _cable.EnableCable();
+            Debug.Log($"<b>[GrappleCrossbow]</b> 🏹 Harpon décoché vers la cible à {_projectileSpeed:F0} m/s !");
         }
 
         /// <summary>
-        /// Décroche le grappin et rentre la corde.
+        /// Décroche le grappin et amorce le rembobinage automatique vers l'arbalète.
         /// </summary>
         public void ReleaseGrapple()
         {
-            if (!_isHooked) return;
+            if (_state == GrappleState.Ready) return;
 
-            _isHooked = false;
-            _hookedRigidbody = null;
-            _hookedTransform = null;
-            _cable.DisableCable();
-            Debug.Log("<b>[GrappleCrossbow]</b> ⚡ Grappin décroché !");
+            if (_state == GrappleState.Hooked || _state == GrappleState.Flying)
+            {
+                StartRetracting();
+            }
+            else if (_state == GrappleState.Retracting)
+            {
+                DockHookHead();
+            }
         }
 
         /// <summary>
@@ -248,7 +362,7 @@ namespace KJD.Game.PlayerController
         /// </summary>
         public void ReelIn()
         {
-            if (!_isHooked) return;
+            if (_state != GrappleState.Hooked) return;
 
             _isReeling = true;
             _currentRopeLength = Mathf.Max(_minRopeLength, _currentRopeLength - (_reelSpeed * Time.deltaTime));
@@ -265,6 +379,138 @@ namespace KJD.Game.PlayerController
 
         #region Tools and Utilities
 
+        private void UpdateFlyingState(float deltaTime)
+        {
+            if (_hookHead == null) return;
+
+            float step = _projectileSpeed * deltaTime;
+            Vector3 currentPos = _hookHead.position;
+
+            // Détection de collision volumique le long de la trajectoire
+            RaycastHit[] hits = Physics.SphereCastAll(currentPos, _hookCollisionRadius, _flyDirection, step, _grappleMask, QueryTriggerInteraction.Ignore);
+
+            RaycastHit validHit = default;
+            bool foundHit = false;
+            float closestDist = float.MaxValue;
+
+            for (int i = 0; i < hits.Length; i++)
+            {
+                RaycastHit h = hits[i];
+                if (h.collider == null) continue;
+                if (h.collider.isTrigger) continue;
+                if (h.collider.transform.root == transform.root) continue;
+                if (h.collider.transform.root == _hookHead) continue;
+                if (_playerRoot != null && h.collider.transform.root == _playerRoot) continue;
+
+                if (h.distance < closestDist)
+                {
+                    closestDist = h.distance;
+                    validHit = h;
+                    foundHit = true;
+                }
+            }
+
+            if (foundHit)
+            {
+                Vector3 hitPoint = validHit.point;
+                if (hitPoint == Vector3.zero)
+                {
+                    hitPoint = currentPos + (_flyDirection * validHit.distance);
+                }
+
+                AttachHook(validHit.collider, hitPoint, validHit.normal);
+                return;
+            }
+
+            // Déplacement du projectile
+            _hookHead.position += _flyDirection * step;
+            _distanceTraveled += step;
+
+            if (_distanceTraveled >= _maxRange)
+            {
+                Debug.Log("<b>[GrappleCrossbow]</b> 💨 Portée max atteinte sans impact. Rembobinage automatique.");
+                StartRetracting();
+            }
+        }
+
+        private void AttachHook(Collider hitCollider, Vector3 hitPoint, Vector3 hitNormal)
+        {
+            _state = GrappleState.Hooked;
+            _hookedRigidbody = hitCollider.GetComponentInParent<Rigidbody>();
+            _hookedTransform = hitCollider.transform;
+            _localAnchorOffset = _hookedTransform.InverseTransformPoint(hitPoint);
+            _staticWorldAnchor = hitPoint;
+
+            if (_hookHead != null)
+            {
+                _hookHead.position = hitPoint;
+                if (hitNormal != Vector3.zero)
+                {
+                    _hookHead.rotation = Quaternion.LookRotation(-hitNormal);
+                }
+            }
+
+            Vector3 muzzlePos = GetMuzzlePosition();
+            _currentRopeLength = Vector3.Distance(muzzlePos, hitPoint);
+
+            Debug.Log($"<b>[GrappleCrossbow]</b> 🎯 Harpon planté dans <b>{hitCollider.name}</b> (Distance : {_currentRopeLength:F1}m)");
+        }
+
+        private void StartRetracting()
+        {
+            _state = GrappleState.Retracting;
+            _hookedRigidbody = null;
+            _hookedTransform = null;
+        }
+
+        private void UpdateRetractingState(float deltaTime)
+        {
+            if (_hookHead == null)
+            {
+                DockHookHead();
+                return;
+            }
+
+            Vector3 muzzlePos = GetMuzzlePosition();
+            Vector3 toMuzzle = muzzlePos - _hookHead.position;
+            float dist = toMuzzle.magnitude;
+            float step = _retractSpeed * deltaTime;
+
+            if (dist <= step || dist < 0.4f)
+            {
+                DockHookHead();
+                Debug.Log("<b>[GrappleCrossbow]</b> 🔄 Grappin rembobiné et armé !");
+            }
+            else
+            {
+                _hookHead.position += toMuzzle.normalized * step;
+                _hookHead.rotation = Quaternion.LookRotation(toMuzzle);
+            }
+        }
+
+        private void DockHookHead()
+        {
+            _state = GrappleState.Ready;
+            _hookedRigidbody = null;
+            _hookedTransform = null;
+
+            if (_cable != null)
+            {
+                _cable.DisableCable();
+            }
+
+            EnsureMuzzlePoint();
+            EnsureHookHead();
+
+            if (_hookHead != null)
+            {
+                _hookHead.position = GetMuzzlePosition();
+                _hookHead.rotation = GetMuzzleRotation();
+                _hookHead.localScale = _hookHeadWorldScale;
+                _hookHead.gameObject.SetActive(true);
+            }
+        }
+
         private void EnsureMuzzlePoint()
         {
             if (_muzzlePoint == null)
@@ -278,18 +524,92 @@ namespace KJD.Game.PlayerController
                 {
                     GameObject muzzle = new GameObject("Muzzle");
                     muzzle.transform.SetParent(transform);
-                    // Dans un cylindre Unity standard (haut de 2m selon Y), l'extrémité est à y = +1f
                     muzzle.transform.localPosition = new Vector3(0f, 1f, 0f);
-                    muzzle.transform.localRotation = Quaternion.identity;
+                    muzzle.transform.localRotation = Quaternion.Euler(-90f, 0f, 0f);
                     _muzzlePoint = muzzle.transform;
                 }
             }
+            else
+            {
+                _muzzlePoint.localPosition = new Vector3(0f, 1f, 0f);
+                _muzzlePoint.localRotation = Quaternion.Euler(-90f, 0f, 0f);
+            }
+        }
+
+        private void EnsureHookHead()
+        {
+            if (_hookHead != null) return;
+
+            // Recherche si déjà présent
+            GameObject existing = GameObject.Find("GrappleHookHead_" + gameObject.GetInstanceID());
+            if (existing != null)
+            {
+                _hookHead = existing.transform;
+                return;
+            }
+
+            // Création d'une tête de harpon stylisée (modèle 3 barbillons)
+            GameObject hookGO = new GameObject("GrappleHookHead_" + gameObject.GetInstanceID());
+            hookGO.transform.position = GetMuzzlePosition();
+            hookGO.transform.rotation = GetMuzzleRotation();
+            hookGO.transform.localScale = _hookHeadWorldScale;
+
+            // Matériau partagé
+            Material hookMat = null;
+            Renderer parentRenderer = GetComponent<Renderer>();
+            if (parentRenderer != null) hookMat = parentRenderer.sharedMaterial;
+
+            // 1. Tige centrale du harpon (Cylindre aligné sur Z)
+            GameObject shaft = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            shaft.name = "Shaft";
+            shaft.transform.SetParent(hookGO.transform);
+            shaft.transform.localPosition = new Vector3(0f, 0f, 0.05f);
+            shaft.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            shaft.transform.localScale = new Vector3(0.04f, 0.06f, 0.04f);
+            DestroyImmediate(shaft.GetComponent<Collider>());
+            if (hookMat != null) shaft.GetComponent<Renderer>().sharedMaterial = hookMat;
+
+            // 2. Pointe avant effilée (Sphère ogivale)
+            GameObject tip = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            tip.name = "Tip";
+            tip.transform.SetParent(hookGO.transform);
+            tip.transform.localPosition = new Vector3(0f, 0f, 0.12f);
+            tip.transform.localRotation = Quaternion.identity;
+            tip.transform.localScale = new Vector3(0.055f, 0.055f, 0.10f);
+            DestroyImmediate(tip.GetComponent<Collider>());
+            if (hookMat != null) tip.GetComponent<Renderer>().sharedMaterial = hookMat;
+
+            // 3. Trois barbillons / griffes orientés vers l'arrière
+            for (int i = 0; i < 3; i++)
+            {
+                GameObject barb = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                barb.name = $"Barb_{i}";
+                barb.transform.SetParent(hookGO.transform);
+
+                float rotZ = i * 120f;
+                Quaternion barbRot = Quaternion.Euler(0f, 0f, rotZ) * Quaternion.Euler(25f, 0f, 0f);
+                Vector3 barbOffset = Quaternion.Euler(0f, 0f, rotZ) * new Vector3(0f, 0.03f, 0.04f);
+
+                barb.transform.localPosition = barbOffset;
+                barb.transform.localRotation = barbRot;
+                barb.transform.localScale = new Vector3(0.015f, 0.02f, 0.06f);
+                DestroyImmediate(barb.GetComponent<Collider>());
+                if (hookMat != null) barb.GetComponent<Renderer>().sharedMaterial = hookMat;
+            }
+
+            _hookHead = hookGO.transform;
         }
 
         public Vector3 GetMuzzlePosition()
         {
             if (_muzzlePoint != null) return _muzzlePoint.position;
-            return transform.position + transform.forward * 0.5f;
+            return transform.position + (transform.up * (transform.lossyScale.y * 0.5f));
+        }
+
+        public Quaternion GetMuzzleRotation()
+        {
+            if (_muzzlePoint != null) return _muzzlePoint.rotation;
+            return Quaternion.LookRotation(transform.up, -transform.forward);
         }
 
         public Vector3 GetCurrentAnchorPosition()
@@ -314,10 +634,9 @@ namespace KJD.Game.PlayerController
                 float excessDistance = currentDist - _currentRopeLength;
                 Vector3 pullDir = toMuzzle.normalized;
 
-                // 1. Si on a accroché un Rigidbody (notre Cube !) : on le tire vers nous
+                // Si on a accroché un Rigidbody (notre Cube !) : on le tire vers nous
                 if (_hookedRigidbody != null && !_hookedRigidbody.isKinematic)
                 {
-                    // Force proportionnelle à l'étirement + correction de vélocité
                     float tensionForce = (excessDistance * _tensionStiffness) + (_isReeling ? _reelPullForce : 0f);
                     _hookedRigidbody.AddForce(pullDir * tensionForce, ForceMode.Acceleration);
 
@@ -337,7 +656,19 @@ namespace KJD.Game.PlayerController
         [Header("--- PARAMÈTRES DU GRAPPIN ---")]
         [Tooltip("Portée maximale du tir en mètres")]
         [Range(10f, 100f)]
-        [SerializeField] private float _maxRange = 50f;
+        [SerializeField] private float _maxRange = 45f;
+
+        [Tooltip("Vitesse de vol de la tête du grappin vers la cible en m/s")]
+        [Range(15f, 120f)]
+        [SerializeField] private float _projectileSpeed = 50f;
+
+        [Tooltip("Vitesse de rembobinage automatique en m/s (en cas d'échec ou d'annulation)")]
+        [Range(20f, 150f)]
+        [SerializeField] private float _retractSpeed = 75f;
+
+        [Tooltip("Rayon de détection de collision de la tête de harpon")]
+        [Range(0.02f, 0.3f)]
+        [SerializeField] private float _hookCollisionRadius = 0.07f;
 
         [Tooltip("Vitesse de ré-enroulement de la corde en m/s")]
         [Range(2f, 30f)]
@@ -359,22 +690,27 @@ namespace KJD.Game.PlayerController
 
         [Header("--- APPARENCE EN MAIN (Vue FPS) ---")]
         [SerializeField] private Vector3 _heldLocalPosition = new Vector3(0.28f, -0.22f, 0.5f);
-        [SerializeField] private Vector3 _heldLocalRotation = new Vector3(90f, 0f, 0f); // 90° X oriente le cylindre vers l'avant !
+        [SerializeField] private Vector3 _heldLocalRotation = new Vector3(90f, 0f, 0f);
         [SerializeField] private Vector3 _heldScale = new Vector3(0.09f, 0.35f, 0.09f);
+        [SerializeField] private Vector3 _hookHeadWorldScale = Vector3.one;
         [SerializeField] private string _promptText = "Ramasser Arbalète Grappin";
 
         [SerializeField] private Transform _muzzlePoint;
+        [SerializeField] private Transform _hookHead;
 
         private Rigidbody _rigidbody;
         private Collider _collider;
         private GrappleCable _cable;
         private ApparitionEffect _apparitionEffect;
+        private Transform _playerRoot;
 
         private bool _isBeingHeld;
-        private bool _isHooked;
         private bool _isReeling;
         private float _currentRopeLength;
+        private float _distanceTraveled;
+        private Vector3 _flyDirection;
 
+        private GrappleState _state = GrappleState.Ready;
         private Rigidbody _hookedRigidbody;
         private Transform _hookedTransform;
         private Vector3 _localAnchorOffset;
