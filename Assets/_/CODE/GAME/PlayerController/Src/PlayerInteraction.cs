@@ -282,6 +282,9 @@ namespace KJD.Game.PlayerController
         {
             if (_heldItem == null || _holdPoint == null) return;
 
+            // Si l'objet est déjà enfant du holdPoint (ex: armes parentées), son suivi est géré directement par le Transform
+            if (_heldItem.Transform.parent == _holdPoint) return;
+
             Vector3 targetPos = _holdPoint.position;
 
             // Secousse de l'objet pendant la charge
@@ -293,7 +296,7 @@ namespace KJD.Game.PlayerController
             }
 
             Rigidbody rb = _heldItem.Rigidbody;
-            if (rb != null)
+            if (rb != null && !rb.isKinematic)
             {
                 Vector3 toTarget = targetPos - rb.position;
                 rb.linearVelocity = toTarget * _holdFollowSpeed;
@@ -369,7 +372,7 @@ namespace KJD.Game.PlayerController
                 _hotbar.NotifyItemDropped(itemToDrop);
             }
 
-            if (itemToDrop.Rigidbody != null)
+            if (itemToDrop.Rigidbody != null && !itemToDrop.Rigidbody.isKinematic)
             {
                 Vector3 dropVelocity = (_cameraTransform != null ? _cameraTransform.forward : transform.forward) * _dropForwardForce;
                 itemToDrop.Rigidbody.linearVelocity = dropVelocity;
