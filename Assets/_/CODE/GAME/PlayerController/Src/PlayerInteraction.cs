@@ -139,7 +139,15 @@ namespace KJD.Game.PlayerController
             {
                 labelStyle.fontSize = 12;
                 labelStyle.normal.textColor = new Color(1f, 0.9f, 0.4f, 0.9f);
-                GUI.Label(new Rect(centerX - 200, centerY + 18, 400, 30), "[Maintenir Clic G / RT] Charger Lancer  •  [Clic D / LT] Poser", labelStyle);
+
+                if (_heldItem is ICustomActionHoldable custom)
+                {
+                    GUI.Label(new Rect(centerX - 250, centerY + 18, 500, 30), $"{custom.GetPrimaryActionPrompt()}  •  {custom.GetSecondaryActionPrompt()}", labelStyle);
+                }
+                else
+                {
+                    GUI.Label(new Rect(centerX - 200, centerY + 18, 400, 30), "[Maintenir Clic G / RT] Charger Lancer  •  [Clic D / LT] Poser", labelStyle);
+                }
             }
 
             // 4. Indication de rappel si les mains sont libres
@@ -216,6 +224,43 @@ namespace KJD.Game.PlayerController
             if (_heldItem == null || _isRecalling)
             {
                 CancelThrowCharge();
+                return;
+            }
+
+            // Si l'objet tenu possède ses propres actions (ex: Arbalète Grappin)
+            if (_heldItem is ICustomActionHoldable custom)
+            {
+                CancelThrowCharge();
+
+                // Action principale (Clic Gauche)
+                if (custom.OverridesPrimaryAction && _activeThrowAction != null)
+                {
+                    if (_activeThrowAction.WasPressedThisFrame())
+                    {
+                        custom.OnPrimaryActionStarted();
+                    }
+                    else if (_activeThrowAction.IsPressed())
+                    {
+                        custom.OnPrimaryActionHeld();
+                    }
+                    else if (_activeThrowAction.WasReleasedThisFrame())
+                    {
+                        custom.OnPrimaryActionReleased();
+                    }
+                }
+
+                // Action secondaire (Clic Droit)
+                if (custom.OverridesSecondaryAction)
+                {
+                    bool isSecondaryPressed = (_activeSecondaryAction != null && _activeSecondaryAction.IsPressed()) ||
+                                              (Mouse.current != null && Mouse.current.rightButton.isPressed);
+
+                    if (isSecondaryPressed)
+                    {
+                        custom.OnSecondaryActionHeld();
+                    }
+                }
+
                 return;
             }
 
@@ -309,6 +354,7 @@ namespace KJD.Game.PlayerController
         public void DropHeldItem()
         {
             if (_heldItem == null || _isRecalling) return;
+            if (_heldItem is ICustomActionHoldable custom && custom.OverridesSecondaryAction) return;
 
             CancelThrowCharge();
 
@@ -516,6 +562,7 @@ namespace KJD.Game.PlayerController
                     if (_activeThrowAction == null) _activeThrowAction = playerMap.FindAction("Attack");
                     if (_activeDropAction == null) _activeDropAction = playerMap.FindAction("Crouch");
                     if (_activeRecallAction == null) _activeRecallAction = playerMap.FindAction("Recall");
+                    if (_activeSecondaryAction == null) _activeSecondaryAction = playerMap.FindAction("Secondary");
                 }
             }
         }
@@ -548,6 +595,11 @@ namespace KJD.Game.PlayerController
                 _activeRecallAction.performed += OnRecallTriggered;
                 _activeRecallAction.started += OnRecallTriggered;
             }
+
+            if (_activeSecondaryAction != null)
+            {
+                _activeSecondaryAction.Enable();
+            }
         }
 
         private void DisableInputActions()
@@ -576,6 +628,11 @@ namespace KJD.Game.PlayerController
                 _activeRecallAction.started -= OnRecallTriggered;
                 _activeRecallAction.Disable();
             }
+
+            if (_activeSecondaryAction != null)
+            {
+                _activeSecondaryAction.Disable();
+            }
         }
 
         private void OnInteractTriggered(InputAction.CallbackContext context)
@@ -588,6 +645,11 @@ namespace KJD.Game.PlayerController
 
         private void OnDropTriggered(InputAction.CallbackContext context)
         {
+            if (_heldItem is ICustomActionHoldable custom && custom.OverridesSecondaryAction)
+            {
+                return;
+            }
+
             DropHeldItem();
         }
 
@@ -701,6 +763,7 @@ namespace KJD.Game.PlayerController
         private InputAction _activeThrowAction;
         private InputAction _activeDropAction;
         private InputAction _activeRecallAction;
+        private InputAction _activeSecondaryAction;
 
         #endregion
     }
